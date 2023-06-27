@@ -1,0 +1,137 @@
+package localexcel
+
+import (
+	"errors"
+	"fmt"
+	"grafana-extract-go/internal/app/crashlog"
+	"regexp"
+	"sort"
+	"strings"
+
+	"github.com/xuri/excelize/v2"
+)
+
+func CreateExcel(data []crashlog.CrashLog) error {
+	if len(data) == 0 {
+		return errors.New("data slice is empty")
+	}
+	// Create a new Excel file
+	file := excelize.NewFile()
+
+	// Extract unique crash logs
+	crashLogs := extractUniqueCrashLogs(data)
+
+	// Create sheets for each unique crash log
+	for i, crashLog := range crashLogs {
+		sheetName := fmt.Sprintf("CrashLog%d", i+1)
+		index, err := file.NewSheet(sheetName)
+		if err != nil {
+			return fmt.Errorf("failed to create new sheet: %s", err)
+		}
+
+		// Set the header row
+		file.SetCellValue(sheetName, "A1", "Crash Log")
+
+		// Populate the crash log data in the sheet
+		crashLogData := filterCrashLogByValue(data, crashLog)
+		row := 2 // Start from the second row
+		for _, log := range crashLogData {
+
+			// Apply the regex pattern to the crash log
+			cleanLog := applyRegex(log.CrashLog)
+
+			// Write each line of the cleaned crash log to the same column but different rows
+			lines := strings.Split(cleanLog, "\n")
+			for _, line := range lines {
+				cell := fmt.Sprintf("A%d", row)
+				file.SetCellValue(sheetName, cell, line)
+				row++
+			}
+		}
+
+		// Set the active sheet
+		file.SetActiveSheet(index)
+
+	}
+
+	// Extract the year and date from the first crash log entry
+	firstLogSystemTime := data[0].SystemTime
+	yearDate := firstLogSystemTime.Format("2006-01-02")
+
+	// Extract the version number from crashLog.Version
+	version, err := extractVersion(data[0].Version)
+	if err != nil {
+		return fmt.Errorf("failed to extract version: %s", err)
+	}
+
+	fmt.Println("Extracted version:", version)
+
+	// Generate the file name
+	fileName := fmt.Sprintf("CrashLogs-%s-%s-%s.xlsx", data[0].Model, version, yearDate)
+
+	// Save the Excel file with the custom name
+	err = file.SaveAs(fileName)
+	if err != nil {
+		return fmt.Errorf("failed to save Excel file: %s", err)
+	}
+
+	return nil
+}
+
+func extractVersion(input string) (string, error) {
+	// Define the regular expression pattern to match the version
+	pattern := `v(\d+\.\d+\.\d+)`
+
+	// Compile the regular expression
+	regex, err := regexp.Compile(pattern)
+	if err != nil {
+		return "", fmt.Errorf("failed to compile regex pattern: %s", err)
+	}
+
+	// Find the first match of the pattern in the input string
+	match := regex.FindStringSubmatch(input)
+	if len(match) < 2 {
+		return "", fmt.Errorf("no version found in input")
+	}
+
+	// Extract the version from the matched group
+	version := match[1]
+
+	return version, nil
+}
+
+func extractUniqueCrashLogs(data []crashlog.CrashLog) []string {
+	uniqueCrashLogs := make(map[string]bool)
+	for _, log := range data {
+		uniqueCrashLogs[log.CrashLog] = true
+	}
+	crashLogs := make([]string, 0, len(uniqueCrashLogs))
+	for log := range uniqueCrashLogs {
+		crashLogs = append(crashLogs, log)
+	}
+	sort.Strings(crashLogs)
+	return crashLogs
+}
+
+func filterCrashLogByValue(data []crashlog.CrashLog, value string) []crashlog.CrashLog {
+	var filteredData []crashlog.CrashLog
+	for _, log := range data {
+		if log.CrashLog == value {
+			filteredData = append(filteredData, log)
+		}
+	}
+	return filteredData
+}
+
+func applyRegex(crashLog string) string {
+	// Define the regex pattern
+	regexPattern := `<\d{1,3}>`
+
+	// Create a regex object with the pattern
+	regex := regexp.MustCompile(regexPattern)
+
+	// Replace the matched patterns with a newline character
+	cleanLog := regex.ReplaceAllString(crashLog, "\n")
+
+	return cleanLog
+}
