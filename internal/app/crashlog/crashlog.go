@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -38,17 +39,19 @@ type CrashLog struct {
 	SortableVersion     int       `json:"sortable_version"`
 }
 
-// func FetchCrashLogs(productLine, date string) ([]CrashLog, error) {
 func FetchCrashLogs(productLine, date, version, model string, size int) ([]CrashLog, error) {
 	// Check if productLine or date is empty
-	if productLine == "" || date == "" || version == "" {
+	if productLine == "" || date == "" || version == "" || model == "" {
 		//TODO: comment for testing prupose
 		//return nil, fmt.Errorf("productLine and date arguments are required")
-		productLine = "protect"
+		// productLine = "protect"
+		// date = "2023_06_15"
+		// version = "v3.1.9"
+		// model = "UNVR"
+		productLine = "network"
 		date = "2023_06_15"
 		version = "v3.1.9"
-		model = "UNVR"
-
+		model = "UDMPRO"
 	}
 	if size <= 0 {
 		size = 10
@@ -57,10 +60,11 @@ func FetchCrashLogs(productLine, date, version, model string, size int) ([]Crash
 	// Debug output
 	log.Printf("productLine: %s, date: %s, version: %s, model: %s, size: %d\n", productLine, date, version, model, size)
 
-	//https://search-crash-manual-t332rijsqlg3hz7pk5pu7atqla.us-west-2.es.amazonaws.com/network_controller_logs_2023_06_15/_search
-	//Network product line: network_controller_logs_year_month_date EX: network_controller_logs_2023_06_15
+	//https://search-crash-manual-t332rijsqlg3hz7pk5pu7atqla.us-west-2.es.amazonaws.com/network_logs_2023_06_15/_search
+	//Network product line: network_logs_year_month_date EX: network_logs_2023_06_15
 	//https://search-crash-manual-t332rijsqlg3hz7pk5pu7atqla.us-west-2.es.amazonaws.com/protect_logs_2023_06_15/_search
 	//Protect product line: protect_logs_year_month_date EX: protect_logs_2023_06_15
+
 	// Construct the Elasticsearch URL based on the product line and date
 	url := fmt.Sprintf("%s/%s_logs_%s/_search", ESBaseURL, productLine, date)
 	log.Println("Elasticsearch URL:", url) // Print the Elasticsearch URL for debugging
@@ -97,6 +101,38 @@ func FetchCrashLogs(productLine, date, version, model string, size int) ([]Crash
 	// 	  }
 	//   }' | jq
 
+	// curl --location --request GET 'https://search-crash-manual-t332rijsqlg3hz7pk5pu7atqla.us-west-2.es.amazonaws.com/network_logs_2023_06_15/_search' --header 'Content-Type: application/json' --data '{
+	// 	"query": {
+	// 	  "bool": {
+	// 		"must": [
+	// 		  {
+	// 			"term": {
+	// 			  "body.type": "kernel_crash"
+	// 			}
+	// 		  },
+	// 		  {
+	// 			"term": {
+	// 			  "body.version": "v3.1.9"
+	// 			}
+	// 		  },
+	// 		  {
+	// 			"terms": {
+	// 			  "body.model.keyword": ["UDMPRO"]
+	// 			}
+	// 		  }
+	// 		]
+	// 	  }
+	// 	},
+	// 	"size": 10,
+	// 	"aggs": {
+	// 		"distinct_counts": {
+	// 		  "cardinality": {
+	// 			"field": "body.anonymous_device_id.keyword"
+	// 		  }
+	// 		}
+	// 	  }
+	//   }' | jq
+
 	// Construct the request body
 	requestBody := map[string]interface{}{
 		"query": map[string]interface{}{
@@ -108,7 +144,7 @@ func FetchCrashLogs(productLine, date, version, model string, size int) ([]Crash
 						},
 					},
 					{
-						"term": map[string]interface{}{
+						"wildcard": map[string]interface{}{
 							"body.version": version,
 						},
 					},
@@ -129,7 +165,7 @@ func FetchCrashLogs(productLine, date, version, model string, size int) ([]Crash
 			},
 		},
 	}
-
+	//log.Println("requestBody", requestBody)
 	requestJSON, err := json.Marshal(requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request body: %s", err)
@@ -173,4 +209,24 @@ func FetchCrashLogs(productLine, date, version, model string, size int) ([]Crash
 	}
 
 	return crashLogs, nil
+}
+
+func IdentifyKernelPanic(crashLog []string) string {
+	panicKeyword := "Kernel panic - "
+
+	for _, line := range crashLog {
+		if strings.Contains(line, panicKeyword) {
+			return extractKernelPanicMessage(line, panicKeyword)
+		}
+	}
+	return "Unknown kernel panic"
+}
+
+func extractKernelPanicMessage(line, panicKeyword string) string {
+	index := strings.Index(line, panicKeyword)
+	if index >= 0 {
+		message := line[index+len(panicKeyword):]
+		return strings.TrimSpace(message)
+	}
+	return "Unknown kernel panic"
 }
