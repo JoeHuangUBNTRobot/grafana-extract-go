@@ -4,8 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"grafana-extract-go/internal/app/crashlog"
-	"regexp"
-	"sort"
+	"grafana-extract-go/internal/crashlogutil"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
@@ -19,7 +18,7 @@ func CreateExcel(data []crashlog.CrashLog) error {
 	file := excelize.NewFile()
 
 	// Extract unique crash logs
-	crashLogs := extractUniqueCrashLogs(data)
+	crashLogs := crashlogutil.ExtractUniqueCrashLogs(data)
 
 	// Create sheets for each unique crash log
 	for i, crashLog := range crashLogs {
@@ -29,23 +28,27 @@ func CreateExcel(data []crashlog.CrashLog) error {
 			return fmt.Errorf("failed to create new sheet: %s", err)
 		}
 
-		// Set the header row
-		file.SetCellValue(sheetName, "A1", "Crash Log")
-
 		// Populate the crash log data in the sheet
-		crashLogData := filterCrashLogByValue(data, crashLog)
+		crashLogData := crashlogutil.FilterCrashLogByValue(data, crashLog)
 		row := 2 // Start from the second row
 		for _, log := range crashLogData {
 
 			// Apply the regex pattern to the crash log
-			cleanLog := applyRegex(log.CrashLog)
+			cleanLog := crashlogutil.ApplyRegex(log.CrashLog)
 
 			// Write each line of the cleaned crash log to the same column but different rows
 			lines := strings.Split(cleanLog, "\n")
+			// Identify kernel panic
+			kpType := crashlog.IdentifyKernelPanic(lines)
+			strReason := "Reason: "
+			// Set the header column
+			file.SetCellValue(sheetName, "A1", strReason+kpType)
 			for _, line := range lines {
-				cell := fmt.Sprintf("A%d", row)
-				file.SetCellValue(sheetName, cell, line)
-				row++
+				if line != "" {
+					cell := fmt.Sprintf("A%d", row)
+					file.SetCellValue(sheetName, cell, line)
+					row++
+				}
 			}
 		}
 
@@ -59,7 +62,7 @@ func CreateExcel(data []crashlog.CrashLog) error {
 	yearDate := firstLogSystemTime.Format("2006-01-02")
 
 	// Extract the version number from crashLog.Version
-	version, err := extractVersion(data[0].Version)
+	version, err := crashlogutil.ExtractVersion(data[0].Version)
 	if err != nil {
 		return fmt.Errorf("failed to extract version: %s", err)
 	}
@@ -78,60 +81,60 @@ func CreateExcel(data []crashlog.CrashLog) error {
 	return nil
 }
 
-func extractVersion(input string) (string, error) {
-	// Define the regular expression pattern to match the version
-	pattern := `v(\d+\.\d+\.\d+)`
+// func extractVersion(input string) (string, error) {
+// 	// Define the regular expression pattern to match the version
+// 	pattern := `v(\d+\.\d+\.\d+)`
 
-	// Compile the regular expression
-	regex, err := regexp.Compile(pattern)
-	if err != nil {
-		return "", fmt.Errorf("failed to compile regex pattern: %s", err)
-	}
+// 	// Compile the regular expression
+// 	regex, err := regexp.Compile(pattern)
+// 	if err != nil {
+// 		return "", fmt.Errorf("failed to compile regex pattern: %s", err)
+// 	}
 
-	// Find the first match of the pattern in the input string
-	match := regex.FindStringSubmatch(input)
-	if len(match) < 2 {
-		return "", fmt.Errorf("no version found in input")
-	}
+// 	// Find the first match of the pattern in the input string
+// 	match := regex.FindStringSubmatch(input)
+// 	if len(match) < 2 {
+// 		return "", fmt.Errorf("no version found in input")
+// 	}
 
-	// Extract the version from the matched group
-	version := match[1]
+// 	// Extract the version from the matched group
+// 	version := match[1]
 
-	return version, nil
-}
+// 	return version, nil
+// }
 
-func extractUniqueCrashLogs(data []crashlog.CrashLog) []string {
-	uniqueCrashLogs := make(map[string]bool)
-	for _, log := range data {
-		uniqueCrashLogs[log.CrashLog] = true
-	}
-	crashLogs := make([]string, 0, len(uniqueCrashLogs))
-	for log := range uniqueCrashLogs {
-		crashLogs = append(crashLogs, log)
-	}
-	sort.Strings(crashLogs)
-	return crashLogs
-}
+// func extractUniqueCrashLogs(data []crashlog.CrashLog) []string {
+// 	uniqueCrashLogs := make(map[string]bool)
+// 	for _, log := range data {
+// 		uniqueCrashLogs[log.CrashLog] = true
+// 	}
+// 	crashLogs := make([]string, 0, len(uniqueCrashLogs))
+// 	for log := range uniqueCrashLogs {
+// 		crashLogs = append(crashLogs, log)
+// 	}
+// 	sort.Strings(crashLogs)
+// 	return crashLogs
+// }
 
-func filterCrashLogByValue(data []crashlog.CrashLog, value string) []crashlog.CrashLog {
-	var filteredData []crashlog.CrashLog
-	for _, log := range data {
-		if log.CrashLog == value {
-			filteredData = append(filteredData, log)
-		}
-	}
-	return filteredData
-}
+// func filterCrashLogByValue(data []crashlog.CrashLog, value string) []crashlog.CrashLog {
+// 	var filteredData []crashlog.CrashLog
+// 	for _, log := range data {
+// 		if log.CrashLog == value {
+// 			filteredData = append(filteredData, log)
+// 		}
+// 	}
+// 	return filteredData
+// }
 
-func applyRegex(crashLog string) string {
-	// Define the regex pattern
-	regexPattern := `<\d{1,3}>`
+// func applyRegex(crashLog string) string {
+// 	// Define the regex pattern
+// 	regexPattern := `<\d{1,3}>`
 
-	// Create a regex object with the pattern
-	regex := regexp.MustCompile(regexPattern)
+// 	// Create a regex object with the pattern
+// 	regex := regexp.MustCompile(regexPattern)
 
-	// Replace the matched patterns with a newline character
-	cleanLog := regex.ReplaceAllString(crashLog, "\n")
+// 	// Replace the matched patterns with a newline character
+// 	cleanLog := regex.ReplaceAllString(crashLog, "\n")
 
-	return cleanLog
-}
+// 	return cleanLog
+// }
