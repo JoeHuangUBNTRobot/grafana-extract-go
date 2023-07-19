@@ -19,6 +19,11 @@ import (
 	"google.golang.org/api/sheets/v4"
 )
 
+const (
+	CredentialsPath = "credential/credentials.json"
+	TokenPath       = "credential/token.json"
+)
+
 type GoogleAPI struct {
 	ctx           context.Context
 	sheetsSvc     *sheets.Service
@@ -177,8 +182,7 @@ func WriteCrashLogs(crashLogs []crashlog.CrashLog) error {
 	sheetNamePrefix := "CrashLog"
 
 	// Initialize the google sheet client API
-	// Users/joehuang/Desktop/grafana-extract-go/credential
-	api, err := NewGoogleAPI("../../credential/credentials.json", "../../credential/token.json")
+	api, err := NewGoogleAPI(CredentialsPath, TokenPath)
 	if err != nil {
 		return err
 	}
