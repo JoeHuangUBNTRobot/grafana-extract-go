@@ -74,7 +74,7 @@ func crashlogHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If writing to Google Sheets failed, create a local Excel file
-	err = localexcel.CreateExcel(crashLogs)
+	err = localexcel.CreateExcel(crashLogs, true)
 	if err != nil {
 		log.Println("Create excel failed with: ", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -94,7 +94,7 @@ func webhookHandler(w http.ResponseWriter, r *http.Request) {
 	crashlogHandler(w, r)
 }
 
-func writeCrashLogsToExcel(productLine, date, version, model string, size int) error {
+func writeCrashLogsToExcel(productLine, date, version, model string, size int, unique bool) error {
 	// Fetch crash logs
 	crashLogs, err := crashlog.FetchCrashLogs(productLine, date, version, model, size)
 	if err != nil {
@@ -102,7 +102,7 @@ func writeCrashLogsToExcel(productLine, date, version, model string, size int) e
 	}
 
 	// Write crash logs to Excel
-	err = localexcel.CreateExcel(crashLogs)
+	err = localexcel.CreateExcel(crashLogs, unique)
 	if err != nil {
 		return fmt.Errorf("failed to create Excel: %s", err)
 	}
@@ -136,7 +136,7 @@ func main() {
 	version := flag.String("v", "", "The version, ex: 3.1.9 or v3.1.9")
 	model := flag.String("m", "", "The model, ex: UDM,UDMPRO,UDMPROSE,UDR,UDW,UDWPRO,UNASPRO,UCKG2,UCKP,UCKENT,UNVR,UNVRPRO")
 	size := flag.Int("s", 10, "The size(the total crash log counts), ex: 10")
-
+	unique := flag.Bool("u", true, "Writing unique logs to excel , ex: true")
 	// Parse command-line flags
 	flag.Parse()
 
@@ -149,12 +149,12 @@ func main() {
 	// Check if a command-line mode flag is provided
 	if *mode != "" {
 		// Debug output
-		log.Printf("Parse CLI: mode: %s, productLine: %s, date: %s, version: %s, model: %s, size: %d\n", *mode, *productLine, *date, *version, *model, *size)
+		log.Printf("Parse CLI: mode: %s, productLine: %s, date: %s, version: %s, model: %s, size: %d, unique: %t\n", *mode, *productLine, *date, *version, *model, *size, *unique)
 
 		// Call the CLI function based on the provided command
 		switch *mode {
 		case "excel":
-			err := writeCrashLogsToExcel(*productLine, *date, *version, *model, *size)
+			err := writeCrashLogsToExcel(*productLine, *date, *version, *model, *size, *unique)
 			if err != nil {
 				fmt.Println("Error writing crash logs to Excel:", err)
 			}

@@ -197,6 +197,13 @@ func WriteCrashLogs(crashLogs []crashlog.CrashLog) error {
 	// Extract unique crash logs
 	uniqueCrashLogs := crashlogutil.ExtractUniqueCrashLogs(crashLogs)
 
+	// TODO: 
+	// Start from the five row in default Sheet1
+	// sheet1row := 5
+	// Create a map to store AnonymousDeviceID
+	// processedIDs := make(map[string]bool)
+
+
 	// Create sheets for each unique crash log
 	for i, crashLog := range uniqueCrashLogs {
 		sheetName := fmt.Sprintf("%s%d", sheetNamePrefix, i+1)
@@ -209,9 +216,21 @@ func WriteCrashLogs(crashLogs []crashlog.CrashLog) error {
 
 		// Prepare the crash log data
 		crashLogData := crashlogutil.FilterCrashLogByValue(crashLogs, crashLog)
+		// TODO: 
+		// Start from the third row in indivudual crash sheet
+		// row := 3
 
 		// Populate the crash log data in the sheet
 		for _, log := range crashLogData {
+			// TODO: call google API
+			// if processedIDs[log.AnonymousDeviceID] && unique {
+			// 	err := file.DeleteSheet(sheetName)
+			// 	if err != nil {
+			// 		return fmt.Errorf("failed to delete new sheet: %s", err)
+			// 	}
+			// 	continue
+			// }
+			
 			// Apply the regex pattern to the crash log
 			cleanLog := crashlogutil.ApplyRegex(log.CrashLog)
 
@@ -224,9 +243,19 @@ func WriteCrashLogs(crashLogs []crashlog.CrashLog) error {
 			// Identify kernel panic
 			kpType := crashlog.IdentifyKernelPanic(lines)
 			strReason := "Reason: "
+			strTitle := "AnonymousDeviceID: "
 			//fmt.Println("kpType:", kpType)
 			// Convert kernel panic type into a column
-			columnData = append(columnData, []interface{}{strReason + kpType})
+			columnData = append(columnData, []interface{}{strReason + kpType })
+			// Set the AnonymousDevice ID
+			columnData = append(columnData, []interface{}{strTitle + log.AnonymousDeviceID })
+			// TODO:calculate total AnonymousDevice ID
+			// sheet1cell := fmt.Sprintf("A%d", sheet1row)
+			// file.SetCellValue("Sheet1", sheet1cell, log.AnonymousDeviceID)
+			// sheet1row++
+			// Take a record for handled AnonymousDeviceID
+			// processedIDs[log.AnonymousDeviceID] = true
+
 
 			// Convert each non-empty line of the crash log into a column
 			for _, line := range lines {

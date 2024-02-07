@@ -10,7 +10,7 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-func CreateExcel(data []crashlog.CrashLog) error {
+func CreateExcel(data []crashlog.CrashLog, unique bool) error {
 	if len(data) == 0 {
 		return errors.New("data slice is empty")
 	}
@@ -19,6 +19,12 @@ func CreateExcel(data []crashlog.CrashLog) error {
 
 	// Extract unique crash logs
 	crashLogs := crashlogutil.ExtractUniqueCrashLogs(data)
+
+	// Start from the five row in default Sheet1
+	sheet1row := 5
+
+	// Create a map to store AnonymousDeviceID
+	processedIDs := make(map[string]bool)
 
 	// Create sheets for each unique crash log
 	for i, crashLog := range crashLogs {
@@ -30,8 +36,17 @@ func CreateExcel(data []crashlog.CrashLog) error {
 
 		// Populate the crash log data in the sheet
 		crashLogData := crashlogutil.FilterCrashLogByValue(data, crashLog)
-		row := 2 // Start from the second row
+		// Start from the third row in indivudual crash sheet
+		row := 3 
+
 		for _, log := range crashLogData {
+			if processedIDs[log.AnonymousDeviceID] && unique {
+				err := file.DeleteSheet(sheetName)
+				if err != nil {
+					return fmt.Errorf("failed to delete new sheet: %s", err)
+				}
+				continue
+			}
 
 			// Apply the regex pattern to the crash log
 			cleanLog := crashlogutil.ApplyRegex(log.CrashLog)
@@ -41,9 +56,21 @@ func CreateExcel(data []crashlog.CrashLog) error {
 			// Identify kernel panic
 			kpType := crashlog.IdentifyKernelPanic(lines)
 			strReason := "Reason: "
+			strTitle := "AnonymousDeviceID: "
 			// Set the header column
-			file.SetCellValue(sheetName, "A1", strReason+kpType)
-			for _, line := range lines {
+			file.SetCellValue(sheetName, "A1", strReason + kpType)
+			// Set the AnonymousDevice ID
+			file.SetCellValue(sheetName, "A2", strTitle + log.AnonymousDeviceID)
+			// calculate total AnonymousDevice ID
+			sheet1cell := fmt.Sprintf("A%d", sheet1row)
+			file.SetCellValue("Sheet1", sheet1cell, log.AnonymousDeviceID)
+			sheet1row++
+			// Take a record for handled AnonymousDeviceID
+			processedIDs[log.AnonymousDeviceID] = true
+			
+			// Reverse the order of lines
+			for j := len(lines) - 1; j >= 0; j-- {
+				line := lines[j]
 				if line != "" {
 					cell := fmt.Sprintf("A%d", row)
 					file.SetCellValue(sheetName, cell, line)
