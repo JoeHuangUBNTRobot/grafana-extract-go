@@ -1,7 +1,6 @@
 # grafana-extract-go
 
 # CLI
-
   - -d string
     	The date, ex: 2023_06_15
   - -m string
@@ -21,6 +20,15 @@ go run main.go -mode google -p network -d 2023_07_02 -v v3.0.18 -m UDMPROSE -s 1
 go run main.go -mode excel -p network -d 2023_07_02 -v v3.0.18 -m UDMPROSE -s 10
 # Checking local excel file in /cmd/main
 EX:  /cmd/main/CrashLogs-UNVR-3.1.9-2023-06-15.xlsx
+
+# Parser CLI
+  - keyword1 string
+      Keyword for kernel crash
+  - keyword2 string
+      Keyword for kernel crash
+  - file string
+      Report source
+go run cmd/parser/parser.go -keyword1="blk_update_request: critical target error, dev sda" -keyword2="Unable to handle kernel NULL pointer dereference at virtual address 00000020" -file=CrashLogs-UCKP-3.2.10-2024-02-01.xlsx
 
 
 # TODO(TBD): Run webhook server
